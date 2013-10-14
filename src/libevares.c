@@ -2,6 +2,15 @@
 #include <arpa/nameser.h>
 #include <errno.h>
 #include <stdlib.h>
+#include "ev_ares_parse_srv_reply.c"
+#include "ev_ares_parse_mx_reply.c"
+#include "ev_ares_parse_ns_reply.c"
+#include "ev_ares_parse_ptr_reply.c"
+#include "ev_ares_parse_txt_reply.c"
+#include "ev_ares_parse_soa_reply.c"
+#include "ev_ares_parse_a_reply.c"
+#include "ev_ares_parse_aaaa_reply.c"
+#include "ev_ares_parse_naptr_reply.c"
 
 static void io_cb (EV_P_ ev_io *w, int revents) {
 	ev_ares * resolver = (ev_ares *) w;
@@ -55,71 +64,12 @@ int ev_ares_init(ev_ares *resolver, double timeout) {
 	return ares_init_options(&resolver->ares.channel, &resolver->ares.options, ARES_OPT_SOCK_STATE_CB);
 }
 
+int ev_ares_clean(ev_ares *resolver) {
+	ares_destroy(resolver->ares.channel);
+	ares_destroy_options(&resolver->ares.options);
+}
+
 // methods
-
-static void ev_ares_internal_a_callback(ev_ares_result_a * res, int status, int timeouts, unsigned char *abuf, int alen) {
-	res->timeouts = timeouts;
-	res->status = status;
-	res->error = ares_strerror(status);
-	if (status == ARES_SUCCESS) {
-		res->count = sizeof(res->a)/sizeof(res->a[0]);
-		int pstatus = ares_parse_a_reply(abuf, alen, NULL, res->a, &res->count);
-		if (pstatus != ARES_SUCCESS) {
-			res->count  = 0;
-			res->status = pstatus;
-			res->error  = ares_strerror(pstatus);
-		}
-	} else {
-		res->count = 0;
-	}
-	res->callback(res);
-	free(res);
-	return;
-}
-
-void ev_ares_a     (struct ev_loop * loop, ev_ares * resolver, char * hostname, ev_ares_callback_a callback) {
-	resolver->loop = loop;
-	ev_ares_result_a * res = malloc(sizeof(ev_ares_result_a));
-	
-	res->resolver = resolver;
-	res->query    = hostname;
-	res->callback = (ev_ares_callback_v) callback;
-	
-	ares_query(resolver->ares.channel, hostname, ns_c_in, ns_t_a, (ares_callback) ev_ares_internal_a_callback, res);
-	return;
-}
-
-static void ev_ares_internal_aaaa_callback(ev_ares_result_aaaa * res, int status, int timeouts, unsigned char *abuf, int alen) {
-	res->timeouts = timeouts;
-	res->status = status;
-	res->error = ares_strerror(status);
-	if (status == ARES_SUCCESS) {
-		res->count = sizeof(res->aaaa)/sizeof(res->aaaa[0]);
-		int pstatus = ares_parse_aaaa_reply(abuf, alen, NULL, res->aaaa, &res->count);
-		if (pstatus != ARES_SUCCESS) {
-			res->count  = 0;
-			res->status = pstatus;
-			res->error  = ares_strerror(pstatus);
-		}
-	} else {
-		res->count = 0;
-	}
-	res->callback(res);
-	free(res);
-	return;
-}
-
-void ev_ares_aaaa     (struct ev_loop * loop, ev_ares * resolver, char * hostname, ev_ares_callback_aaaa callback) {
-	resolver->loop = loop;
-	ev_ares_result_aaaa * res = malloc(sizeof(ev_ares_result_aaaa));
-	
-	res->resolver = resolver;
-	res->query    = hostname;
-	res->callback = (ev_ares_callback_v) callback;
-	
-	ares_query(resolver->ares.channel, hostname, ns_c_in, ns_t_aaaa, (ares_callback) ev_ares_internal_aaaa_callback, res);
-	return;
-}
 
 typedef struct _sortable list_t;
 struct _sortable {
@@ -128,7 +78,7 @@ struct _sortable {
 	unsigned short    value;
 };
 
-void sort_split(list_t* src, list_t ** front, list_t **back) {
+static void sort_split(list_t* src, list_t ** front, list_t **back) {
 	list_t *fast, *slow;
 	if (!src || !src->next) {
 		*front = src;
@@ -151,8 +101,8 @@ void sort_split(list_t* src, list_t ** front, list_t **back) {
 }
 
 
-list_t * sort_merge (list_t * a, list_t * b);
-list_t * sort_merge (list_t * a, list_t * b) {
+static inline list_t * sort_merge (list_t * a, list_t * b);
+static inline list_t * sort_merge (list_t * a, list_t * b) {
 	list_t * res = NULL;
 	if (!a) return b;
 	else if (!b) return a;
@@ -167,8 +117,8 @@ list_t * sort_merge (list_t * a, list_t * b) {
 	return res;
 }
 
-void sort_list ( list_t** list );
-void sort_list ( list_t** list )
+static void sort_list ( list_t** list );
+static void sort_list ( list_t** list )
 {
 	list_t* head = *list;
 	list_t *a, *b;
@@ -181,119 +131,22 @@ void sort_list ( list_t** list )
 	return;
 }
 
-static void ev_ares_internal_mx_callback(ev_ares_result_mx * res, int status, int timeouts, unsigned char *abuf, int alen) {
+static void ev_ares_internal_gethostbyaddr_callback(ev_ares_result_hba * res, int status, int timeouts, struct hostent *ptr) {
 	res->timeouts = timeouts;
 	res->status = status;
 	res->error = ares_strerror(status);
-	struct ares_mx_reply* mx = NULL;
-	if (status == ARES_SUCCESS) {
-		int pstatus = ares_parse_mx_reply(abuf, alen, &mx);
-		if (pstatus == ARES_SUCCESS) {
-			sort_list( (list_t **) &mx );
-		} else {
-			res->status = pstatus;
-			res->error  = ares_strerror(pstatus);
-		}
-		res->mx = mx;
-	}
-	res->callback(res);
-	if(mx)
-		ares_free_data(mx);
-	free(res);
-}
-
-void ev_ares_mx    (struct ev_loop * loop, ev_ares * resolver, char * hostname, ev_ares_callback_mx callback) {
-	resolver->loop = loop;
-	ev_ares_result_mx * res = malloc(sizeof(ev_ares_result_mx));
-	
-	res->resolver = resolver;
-	res->query    = hostname;
-	res->callback = (ev_ares_callback_v) callback;
-	
-	ares_query(resolver->ares.channel, hostname, ns_c_in, ns_t_mx, (ares_callback) ev_ares_internal_mx_callback, res);
-	return;
-}
-
-static void ev_ares_internal_ns_callback(ev_ares_result_ns * res, int status, int timeouts, unsigned char *abuf, int alen) {
-	res->timeouts = timeouts;
-	res->status = status;
-	res->error = ares_strerror(status);
-	struct hostent *ns = 0;
-	if (status == ARES_SUCCESS) {
-		int pstatus = ares_parse_ns_reply(abuf, alen, &ns);
-		if (pstatus != ARES_SUCCESS) {
-			res->status = pstatus;
-			res->error  = ares_strerror(pstatus);
-		}
-	}
-	res->ns = ns;
-	res->callback(res);
-	if (ns)
-		ares_free_hostent(ns);
-	free(res);
-	return;
-}
-
-void ev_ares_ns     (struct ev_loop * loop, ev_ares * resolver, char * hostname, ev_ares_callback_ns callback) {
-	resolver->loop = loop;
-	ev_ares_result_ns * res = malloc(sizeof(ev_ares_result_ns));
-	
-	res->resolver = resolver;
-	res->query    = hostname;
-	res->callback = (ev_ares_callback_v) callback;
-	
-	ares_query(resolver->ares.channel, hostname, ns_c_in, ns_t_ns, (ares_callback) ev_ares_internal_ns_callback, res);
-	return;
-}
-
-static void ev_ares_internal_ptr_callback(ev_ares_result_ptr * res, int status, int timeouts, unsigned char *abuf, int alen) {
-	res->timeouts = timeouts;
-	res->status = status;
-	res->error = ares_strerror(status);
-	struct hostent *ptr = 0;
-	if (status == ARES_SUCCESS) {
-		int pstatus = ares_parse_ptr_reply(abuf, alen, 0, 0, res->family, &ptr);
-		if (pstatus != ARES_SUCCESS) {
-			res->status = pstatus;
-			res->error  = ares_strerror(pstatus);
-		}
-	}
-	res->ptr = ptr;
-	res->callback(res);
-	if (ptr)
-		ares_free_hostent(ptr);
-	free(res);
-	return;
-}
-
-void ev_ares_ptr     (struct ev_loop * loop, ev_ares * resolver, char * hostname, int family, ev_ares_callback_ptr callback) {
-	resolver->loop = loop;
-	ev_ares_result_ptr * res = malloc(sizeof(ev_ares_result_ptr));
-	
-	res->resolver = resolver;
-	res->query    = hostname;
-	res->family   = family;
-	res->callback = (ev_ares_callback_v) callback;
-	
-	ares_query(resolver->ares.channel, hostname, ns_c_in, ns_t_ptr, (ares_callback) ev_ares_internal_ptr_callback, res);
-	return;
-}
-
-static void ev_ares_internal_gethostbyaddr_callback(ev_ares_result_ptr * res, int status, int timeouts, struct hostent *ptr) {
-	res->timeouts = timeouts;
-	res->status = status;
-	res->error = ares_strerror(status);
-	res->ptr = ptr;
+	res->hosts = ptr;
 	res->callback(res);
 	free(res);
 	return;
 }
 
-void ev_ares_gethostbyaddr (struct ev_loop * loop, ev_ares * resolver, char * hostname, ev_ares_callback_ptr callback) {
+void ev_ares_gethostbyaddr (struct ev_loop * loop, ev_ares * resolver, char * hostname, void *any, ev_ares_callback_hba callback) {
 	resolver->loop = loop;
-	ev_ares_result_ptr * res = malloc(sizeof(ev_ares_result_ptr));
+	ev_ares_result_hba * res = malloc(sizeof(ev_ares_result_hba));
 	int length;
 	char addr[ sizeof(struct in6_addr) ];
+	res->any      = any;
 	res->resolver = resolver;
 	res->query    = hostname;
 	res->callback = (ev_ares_callback_v) callback;
@@ -311,7 +164,7 @@ void ev_ares_gethostbyaddr (struct ev_loop * loop, ev_ares * resolver, char * ho
 	{
 		res->status = errno;
 		res->error = strerror(errno);
-		res->ptr = 0;
+		res->hosts = 0;
 		callback(res);
 		free(res);
 		return;
@@ -321,64 +174,31 @@ void ev_ares_gethostbyaddr (struct ev_loop * loop, ev_ares * resolver, char * ho
 	return;
 }
 
-
-
-static void ev_ares_internal_srv_callback(ev_ares_result_srv * res, int status, int timeouts, unsigned char *abuf, int alen) {
-	res->timeouts = timeouts;
-	res->status = status;
-	res->error = ares_strerror(status);
-	struct ares_srv_reply* reply = NULL;
-	if (status == ARES_SUCCESS) {
-		int pstatus = ares_parse_srv_reply(abuf, alen, &reply);
-		if (pstatus == ARES_SUCCESS) {
-			sort_list( (list_t **) &reply );
-		} else {
-			res->status = pstatus;
-			res->error  = ares_strerror(pstatus);
-		}
-		res->srv = reply;
-	}
-	
-	res->callback(res);
-	if(reply)
-		ares_free_data(reply);
-	free(res);
-}
-void ev_ares_srv    (struct ev_loop * loop, ev_ares * resolver, char * hostname, ev_ares_callback_srv callback) {
-	resolver->loop = loop;
-	ev_ares_result_srv * res = malloc(sizeof(ev_ares_result_srv));
-	
-	res->resolver = resolver;
-	res->query    = hostname;
-	res->callback = (ev_ares_callback_v) callback;
-	
-	ares_query(resolver->ares.channel, hostname, ns_c_in, ns_t_srv, (ares_callback) ev_ares_internal_srv_callback, res);
-	return;
-}
-
-#define gen_method(type)\
+#define gen_method(type,dosort)\
 static void ev_ares_internal_##type##_callback(ev_ares_result_##type * res, int status, int timeouts, unsigned char *abuf, int alen) {\
 	res->timeouts = timeouts;\
 	res->status = status;\
 	res->error = ares_strerror(status);\
-	struct ares_##type##_reply* reply = NULL;\
+	struct ev_ares_##type##_reply* reply = NULL;\
 	if (status == ARES_SUCCESS) {\
-		int pstatus = ares_parse_##type##_reply(abuf, alen, &reply);\
-		if (pstatus != ARES_SUCCESS) {\
+		int pstatus = ev_ares_parse_##type##_reply(abuf, alen, &reply);\
+		if (pstatus == ARES_SUCCESS) {\
+			if (dosort) sort_list( (list_t **) &reply );\
+		} else {\
 			res->status = pstatus;\
 			res->error  = ares_strerror(pstatus);\
 		}\
 		res->type = reply;\
 	}\
 	res->callback(res);\
-	if(reply)\
-		ares_free_data(reply);\
+	ev_ares_free_##type##_reply(reply);\
 	free(res);\
 }\
-void ev_ares_##type    (struct ev_loop * loop, ev_ares * resolver, char * hostname, ev_ares_callback_##type callback) {\
+void ev_ares_##type    (struct ev_loop * loop, ev_ares * resolver, char * hostname, void * any, ev_ares_callback_##type callback) {\
 	resolver->loop = loop;\
 	ev_ares_result_##type * res = malloc(sizeof(ev_ares_result_##type));\
 	\
+	res->any      = any; \
 	res->resolver = resolver;\
 	res->query    = hostname;\
 	res->callback = (ev_ares_callback_v) callback;\
@@ -387,8 +207,14 @@ void ev_ares_##type    (struct ev_loop * loop, ev_ares * resolver, char * hostna
 	return;\
 }
 
-gen_method(txt);
-gen_method(soa);
+gen_method(a,0);
+gen_method(aaaa,0);
+gen_method(mx,1);
+gen_method(ns,0);
+gen_method(ptr,0);
+gen_method(srv,1);
+gen_method(txt,0);
+gen_method(soa,0);
+gen_method(naptr,1);
 
 #undef gen_metod
-

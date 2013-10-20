@@ -20,8 +20,17 @@
 	} while(0)
 #endif
 
+#define IOMAX 8
+
 typedef struct {
-	ev_io    io;
+	ev_io io;
+	int   id;
+} io_ptr;
+
+typedef struct {
+	//ev_io    io;
+	io_ptr     ios[8];
+	int        ioc;
 	ev_timer tw;
 	struct ev_loop * loop;
 	struct {

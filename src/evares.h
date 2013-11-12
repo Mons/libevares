@@ -20,7 +20,7 @@
 	} while(0)
 #endif
 
-#define IOMAX 8
+#define IOMAX ARES_GETSOCK_MAXNUM
 
 typedef struct {
 	ev_io io;
@@ -29,7 +29,7 @@ typedef struct {
 
 typedef struct {
 	//ev_io    io;
-	io_ptr     ios[8];
+	io_ptr     ios[IOMAX];
 	int        ioc;
 	ev_timer tw;
 	struct ev_loop * loop;

@@ -13,6 +13,8 @@
 #include "ev_ares_parse_aaaa_reply.c"
 #include "ev_ares_parse_naptr_reply.c"
 
+//static const char *lookups = "fb";
+
 static void io_cb (EV_P_ ev_io *w, int revents) {
 	io_ptr * iop = (io_ptr *) w;
 	ev_ares * resolver = (ev_ares *) ( (char *) w - (ptrdiff_t) &((ev_ares *) 0)->ios[ iop->id ] );
@@ -128,6 +130,8 @@ int ev_ares_init(ev_ares *resolver, double timeout) {
 	
 	resolver->ares.options.sock_state_cb_data = resolver;
 	resolver->ares.options.sock_state_cb = ev_ares_sock_state_cb;
+	//resolver->ares.options.lookups = strdup(lookups);
+	
 	
 	resolver->timeout.tv_sec = timeout;
 	resolver->timeout.tv_usec = (timeout - (int)timeout) * 1e6;
@@ -140,7 +144,7 @@ int ev_ares_init(ev_ares *resolver, double timeout) {
 	}
 	ev_init(&resolver->tw,tw_cb);
 	
-	return ares_init_options(&resolver->ares.channel, &resolver->ares.options, ARES_OPT_SOCK_STATE_CB);
+	return ares_init_options(&resolver->ares.channel, &resolver->ares.options, ARES_OPT_SOCK_STATE_CB); //  | ARES_OPT_LOOKUPS // lookups works only for gethostbyname
 }
 
 int ev_ares_clean(ev_ares *resolver) {
@@ -282,7 +286,7 @@ void ev_ares_##type    (struct ev_loop * loop, ev_ares * resolver, char * hostna
 	res->query    = hostname;\
 	res->callback = (ev_ares_callback_v) callback;\
 	\
-	ares_query(resolver->ares.channel, hostname, ns_c_in, ns_t_##type, (ares_callback) ev_ares_internal_##type##_callback, res);\
+	ares_search(resolver->ares.channel, hostname, ns_c_in, ns_t_##type, (ares_callback) ev_ares_internal_##type##_callback, res);\
 	return;\
 }
 

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static void callback_soa(ev_ares_result_soa * res, void * any) {
+static void callback_soa(ev_ares_result_soa * res) {
 	printf("Result for SOA '%s': %s\n",res->query, res->error);
 	if (res->status != ARES_SUCCESS) return;
 	struct ev_ares_soa_reply* soa = res->soa;

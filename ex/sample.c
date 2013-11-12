@@ -5,6 +5,7 @@
 
 static void callback_soa(ev_ares_result_soa * res, void * any) {
 	printf("Result for SOA '%s': %s\n",res->query, res->error);
+	if (res->status != ARES_SUCCESS) return;
 	struct ev_ares_soa_reply* soa = res->soa;
 	printf(": NS: %s; Hostmaster: %s, Serial: %d; Ref: %d; Ret: %d; Exp: %d; Mttl: %d; TTL: %d\n",
 		soa->nsname, soa->hostmaster, soa->serial, soa->refresh, soa->retry, soa->expire, soa->minttl, soa->ttl);
@@ -22,6 +23,7 @@ static void callback_ns(ev_ares_result_ns * res) {
 
 static void callback_a(ev_ares_result_a * res) {
 	printf("Result for A '%s': %s\n",res->query, res->error);
+	if (res->status != ARES_SUCCESS) return;
 	struct ev_ares_a_reply* r = res->a;
 	char ips[INET_ADDRSTRLEN];
 	for (; r != NULL; r = r->next) {
@@ -33,6 +35,7 @@ static void callback_a(ev_ares_result_a * res) {
 
 static void callback_aaaa(ev_ares_result_aaaa * res) {
 	printf("Result for AAAA '%s': %s\n",res->query, res->error);
+	if (res->status != ARES_SUCCESS) return;
 	struct ev_ares_aaaa_reply* r = res->aaaa;
 	char ips[INET6_ADDRSTRLEN];
 	for (; r != NULL; r = r->next) {
@@ -44,6 +47,7 @@ static void callback_aaaa(ev_ares_result_aaaa * res) {
 
 static void callback_mx(ev_ares_result_mx * res) {
 	printf("Result for MX '%s': %s\n",res->query, res->error);
+	if (res->status != ARES_SUCCESS) return;
 	struct ev_ares_mx_reply* r = res->mx;
 	int i;
 	for (; r != NULL; r = r->next) {
@@ -54,6 +58,7 @@ static void callback_mx(ev_ares_result_mx * res) {
 
 static void callback_srv(ev_ares_result_srv * res) {
 	printf("Result for SRV '%s': %s\n",res->query, res->error);
+	if (res->status != ARES_SUCCESS) return;
 	struct ev_ares_srv_reply* srv = res->srv;
 	int i;
 	for (; srv != NULL; srv = srv->next) {
@@ -64,6 +69,7 @@ static void callback_srv(ev_ares_result_srv * res) {
 
 static void callback_txt(ev_ares_result_txt * res) {
 	printf("Result for TXT '%s': %s\n",res->query, res->error);
+	if (res->status != ARES_SUCCESS) return;
 	struct ev_ares_txt_reply* r = res->txt;
 	for (; r != NULL; r = r->next) {
 		printf(": %s (ttl=%d)\n", r->txt, r->ttl);
